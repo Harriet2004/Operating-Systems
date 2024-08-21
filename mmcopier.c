@@ -11,16 +11,21 @@
 #define FILE_LENGTH 256
 #define BUFFER 1024
 
+int print_error(char *msg) {
+    fprintf(stderr, "%s\n", msg);
+    exit(2);
+}
+
 // Structure to hold the source and destination file names
-struct FileData
+typedef struct 
 {
     char source_file[FILE_LENGTH];
     char destination_file[FILE_LENGTH];
-};
+} FileData;
 
 void *fileCopy(void *arg)
 {
-    struct FileData *file_data = (struct FileData *)arg;
+    FileData *file_data = (FileData *)arg;
     int source_desc;
     int dest_desc;
     ssize_t num_bytes_read;
@@ -61,6 +66,7 @@ void *fileCopy(void *arg)
 
 int main(int argc, char *argv[])
 {
+    int ret;
     const char *destination = "./destination_dir";
     struct stat st = {0};
 
@@ -87,7 +93,7 @@ int main(int argc, char *argv[])
     char *destination_dir = argv[3];
 
     pthread_t thread[num_files];
-    struct FileData thread_data[num_files];
+    FileData thread_data[num_files];
 
     char source_path[FILE_LENGTH];
     char destination_path[FILE_LENGTH];
@@ -103,18 +109,15 @@ int main(int argc, char *argv[])
         strncpy(thread_data[i].destination_file, destination_path, sizeof(thread_data[i].destination_file) - 1);
         thread_data[i].destination_file[sizeof(thread_data[i].destination_file) - 1] = '\0';
 
-        int thread_creation = pthread_create(&thread[i], NULL, fileCopy, &thread_data[i]);
-        if (thread_creation != 0)
-        {
-            fprintf(stderr, "Error: Creation of thread error %s\n", strerror(thread_creation));
-            return EXIT_FAILURE;
-        }
+        ret = pthread_create(&thread[i], NULL, fileCopy, &thread_data[i]);
+        if (ret) print_error("Error: Creation of thread error");
     }
 
     // Wait for all threads to finish
     for (int i = 0; i < num_files; i++)
     {
-        pthread_join(thread[i], NULL);
+        ret = pthread_join(thread[i], NULL);
+        if (ret) print_error("ERROR: pthread join failed");
     }
 
     return EXIT_SUCCESS;
