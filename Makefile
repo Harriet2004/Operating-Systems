@@ -1,5 +1,5 @@
 C = gcc
-FLAGS = -Wall -Werror
+FLAGS = -std=c99 -Wall -Werror
 LDFLAGS = -lpthread
 
 all: mmcopier mscopier
