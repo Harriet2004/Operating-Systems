@@ -11,10 +11,10 @@
 #define FILE_LENGTH 256
 #define BUFFER 1024
 
-int print_error(char *msg) {
-    fprintf(stderr, "%s\n", msg);
-    exit(2);
-}
+    int print_error(char *msg) {
+        fprintf(stderr, "%s\n", msg);
+        exit(2);
+    }
 
 // Structure to hold the source and destination file names
 typedef struct 
