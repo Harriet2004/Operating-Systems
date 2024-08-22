@@ -1,6 +1,6 @@
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -16,22 +16,21 @@
         exit(2);
     }
 
-typedef struct 
-{
+typedef struct {
     char source_file[FILE_LENGTH];
     char destination_file[FILE_LENGTH];
 } FileData;
 
 void *fileCopy(void *arg) {
     FileData *file_data = (FileData *)arg;
-    FILE *source_file;
+    FILE *src_file;
     FILE *dest_file;
     size_t num_bytes_read;
     size_t num_bytes_written;
     char file_buffer[BUFFER];
 
-    source_file = fopen(file_data->source_file, "rb");
-    if (source_file == NULL) {
+    src_file = fopen(file_data->source_file, "rb");
+    if (src_file == NULL) {
         fprintf(stderr, "Error while opening the source file %s: %s\n", file_data->source_file, strerror(errno));
         pthread_exit(NULL);
     }
@@ -39,26 +38,26 @@ void *fileCopy(void *arg) {
     dest_file = fopen(file_data->destination_file, "wb");
     if (dest_file == NULL) {
         fprintf(stderr, "Error while opening the destination file %s: %s\n", file_data->destination_file, strerror(errno));
-        fclose(source_file);
+        fclose(src_file);
         pthread_exit(NULL);
     }
 
-    while ((num_bytes_read = fread(file_buffer, 1, BUFFER, source_file)) > 0) {
+    while ((num_bytes_read = fread(file_buffer, 1, BUFFER, src_file)) > 0) {
         num_bytes_written = fwrite(file_buffer, 1, num_bytes_read, dest_file);
         if (num_bytes_written < num_bytes_read) {
             fprintf(stderr, "Error while writing to the destination file %s: %s\n", file_data->destination_file, strerror(errno));
-            fclose(source_file);
+            fclose(src_file);
             fclose(dest_file);
             pthread_exit(NULL);
         }
     }
 
-    if (ferror(source_file)) {
+    if (ferror(src_file)) {
         fprintf(stderr, "Error while reading the source file %s\n", file_data->source_file);
     }
 
     // Close files
-    fclose(source_file);
+    fclose(src_file);
     fclose(dest_file);
     pthread_exit(NULL);
 }

@@ -15,8 +15,7 @@
         exit(2);
     }
 
-typedef struct
-{
+typedef struct {
     char *lines[QUEUE_SIZE];  // Array to hold lines
     int head;                 // Index for the front of the queue
     int tail;                 // Index for the end of the queue
@@ -31,33 +30,28 @@ SharedQueue queue;
 pthread_mutex_t eof_mutex = PTHREAD_MUTEX_INITIALIZER;
 int eof_status = 0;
 
-void *reader_thread(void *arg)
-{
+void *reader_thread(void *arg) {
     FILE *source_file = (FILE *)arg;
     char *line_pointer = NULL;
     size_t length = 0;
     bool loop_run = true;
 
-    while (loop_run)
-    {
+    while (loop_run) {
         pthread_mutex_lock(&queue.mutex);
 
-        while (queue.count == QUEUE_SIZE)
-        {
+        while (queue.count == QUEUE_SIZE) {
             pthread_cond_wait(&queue.not_full, &queue.mutex);
         }
 
         ssize_t read_len = getline(&line_pointer, &length, source_file);
-        if (read_len != -1)
-        {
+        if (read_len != -1) {
             queue.lines[queue.tail] = line_pointer;  
             queue.tail = (queue.tail + 1) % QUEUE_SIZE;
             queue.count++;
             line_pointer = NULL;  
             length = 0;      
         }
-        else
-        {
+        else {
             pthread_mutex_lock(&eof_mutex);
             eof_status = 1;
             pthread_mutex_unlock(&eof_mutex);
@@ -73,8 +67,7 @@ void *reader_thread(void *arg)
     return NULL;
 }
 
-void *writer_thread(void *arg)
-{
+void *writer_thread(void *arg) {
     FILE *destination_file = (FILE *)arg;
     bool loop_run = true; 
 
@@ -123,21 +116,18 @@ int main(int argc, char *argv[]) {
     }
 
     int n = atoi(argv[1]);
-    if (n < 2 || n > 10)
-    {
+    if (n < 2 || n > 10) {
         print_error("Error: <n> must be between 2 and 10\n");
     }
 
     FILE *source_file = fopen(argv[2], "r");
-    if (source_file == NULL)
-    {
+    if (source_file == NULL) {
         fprintf(stderr, "Error: Cannot open source file %s: %s\n", argv[2], strerror(errno));
         return EXIT_FAILURE;
     }
 
     FILE *destination_file = fopen(argv[3], "wb");
-    if (destination_file == NULL)
-    {   
+    if (destination_file == NULL) {   
         fprintf(stderr, "Error: Cannot open destination file %s: %s\n", argv[3], strerror(errno));
         fclose(source_file);
         return EXIT_FAILURE;
@@ -153,8 +143,7 @@ int main(int argc, char *argv[]) {
     pthread_t readers[n];
     pthread_t writers[n];
 
-    for (int i = 0; i < n; ++i)
-    {
+    for (int i = 0; i < n; ++i) {
         ret = pthread_create(&readers[i], NULL, reader_thread, source_file);
         if (ret) print_error("Error: Creation of thread error");
         ret = pthread_create(&writers[i], NULL, writer_thread, destination_file);
