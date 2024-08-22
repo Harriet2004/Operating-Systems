@@ -8,6 +8,11 @@
 #define QUEUE_SIZE 20
 #define LINE_BUFFER_SIZE 1024
 
+    int print_error(char *msg) {
+        fprintf(stderr, "%s\n", msg);
+        exit(2);
+    }
+
 typedef struct
 {
     char *lines[QUEUE_SIZE];  // Array to hold lines
