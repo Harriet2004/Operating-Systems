@@ -5,6 +5,19 @@
 #include <unistd.h>
 
 #define BUFFER_SIZE 1024
+#define QUEUE_SIZE 20
+#define LINE_BUFFER_SIZE 1024
+
+typedef struct
+{
+    char *lines[QUEUE_SIZE];  // Array to hold lines
+    int head;                 // Index for the front of the queue
+    int tail;                 // Index for the end of the queue
+    int count;                // Number of items in the queue
+    pthread_mutex_t mutex;    // Mutex to protect access to the queue
+    pthread_cond_t not_empty; // Condition variable to signal that the queue is not empty
+    pthread_cond_t not_full;  // Condition variable to signal that the queue is not full
+} SharedQueue;
 
 // Shared data structures
 SharedQueue queue;
