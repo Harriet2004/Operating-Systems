@@ -12,55 +12,54 @@
 #define BUFFER 1024
 
     int print_error(char *msg) {
-        fprintf(stderr, "%s\n", msg);
+        fprintf(stderr, "%s %s\n", msg, strerror(errno));
         exit(2);
     }
 
-// Structure to hold the source and destination file names
 typedef struct 
 {
     char source_file[FILE_LENGTH];
     char destination_file[FILE_LENGTH];
 } FileData;
 
-void *fileCopy(void *arg)
-{
+void *fileCopy(void *arg) {
     FileData *file_data = (FileData *)arg;
-    int source_desc;
-    int dest_desc;
-    ssize_t num_bytes_read;
-    ssize_t num_bytes_written;
-
+    FILE *source_file;
+    FILE *dest_file;
+    size_t num_bytes_read;
+    size_t num_bytes_written;
     char file_buffer[BUFFER];
 
-    source_desc = open(file_data->source_file, O_RDONLY);
-    if (source_desc < 0)
-    {
+    source_file = fopen(file_data->source_file, "rb");
+    if (source_file == NULL) {
         fprintf(stderr, "Error while opening the source file %s: %s\n", file_data->source_file, strerror(errno));
         pthread_exit(NULL);
     }
 
-    dest_desc = open(file_data->destination_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (dest_desc < 0)
-    {
+    dest_file = fopen(file_data->destination_file, "wb");
+    if (dest_file == NULL) {
         fprintf(stderr, "Error while opening the destination file %s: %s\n", file_data->destination_file, strerror(errno));
-        close(source_desc);
+        fclose(source_file);
         pthread_exit(NULL);
     }
 
-    while ((num_bytes_read = read(source_desc, file_buffer, BUFFER)) > 0)
-    {
-        num_bytes_written = write(dest_desc, file_buffer, num_bytes_read);
-        if (num_bytes_written < 0)
-        {
+    while ((num_bytes_read = fread(file_buffer, 1, BUFFER, source_file)) > 0) {
+        num_bytes_written = fwrite(file_buffer, 1, num_bytes_read, dest_file);
+        if (num_bytes_written < num_bytes_read) {
             fprintf(stderr, "Error while writing to the destination file %s: %s\n", file_data->destination_file, strerror(errno));
-            close(source_desc);
-            close(dest_desc);
+            fclose(source_file);
+            fclose(dest_file);
             pthread_exit(NULL);
         }
     }
-    close(source_desc);
-    close(dest_desc);
+
+    if (ferror(source_file)) {
+        fprintf(stderr, "Error while reading the source file %s\n", file_data->source_file);
+    }
+
+    // Close files
+    fclose(source_file);
+    fclose(dest_file);
     pthread_exit(NULL);
 }
 
@@ -84,8 +83,8 @@ int main(int argc, char *argv[])
     int num_files = atoi(argv[1]);
 
     if (num_files < 0 || num_files > 10)
-    {
-        fprintf(stderr, "Error: <num_files> must be between 0 and 10.\n");
+    {   
+        print_error("Error: <num_files> must be between 0 and 10");
         return EXIT_FAILURE;
     }
 
@@ -95,25 +94,18 @@ int main(int argc, char *argv[])
     pthread_t thread[num_files];
     FileData thread_data[num_files];
 
-    char source_path[FILE_LENGTH];
-    char destination_path[FILE_LENGTH];
-
-    // Create threads to copy files
     for (int i = 0; i < num_files; i++)
-    {
-        sprintf(source_path, "%s/source%d.txt", source_dir, i + 1);
-        strncpy(thread_data[i].source_file, source_path, sizeof(thread_data[i].source_file) - 1);
+    {   
+        snprintf(thread_data[i].source_file, sizeof(thread_data[i].source_file), "%s/source%d.txt", source_dir, i + 1);
         thread_data[i].source_file[sizeof(thread_data[i].source_file) - 1] = '\0';
 
-        sprintf(destination_path, "%s/source%d.txt", destination_dir, i + 1);
-        strncpy(thread_data[i].destination_file, destination_path, sizeof(thread_data[i].destination_file) - 1);
+        snprintf(thread_data[i].destination_file, sizeof(thread_data[i].destination_file), "%s/source%d.txt", destination_dir, i + 1);
         thread_data[i].destination_file[sizeof(thread_data[i].destination_file) - 1] = '\0';
 
         ret = pthread_create(&thread[i], NULL, fileCopy, &thread_data[i]);
         if (ret) print_error("Error: Creation of thread error");
     }
 
-    // Wait for all threads to finish
     for (int i = 0; i < num_files; i++)
     {
         ret = pthread_join(thread[i], NULL);

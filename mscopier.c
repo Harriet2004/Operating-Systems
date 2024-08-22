@@ -26,10 +26,8 @@ typedef struct
     pthread_cond_t not_full;  // Condition variable to signal that the queue is not full
 } SharedQueue;
 
-// Shared data structures
 SharedQueue queue;
 
-// Mutex and condition variables for end-of-file flag
 pthread_mutex_t eof_mutex = PTHREAD_MUTEX_INITIALIZER;
 int eof_status = 0;
 
@@ -44,35 +42,31 @@ void *reader_thread(void *arg)
     {
         pthread_mutex_lock(&queue.mutex);
 
-        // Wait until the queue is not full
         while (queue.count == QUEUE_SIZE)
         {
             pthread_cond_wait(&queue.not_full, &queue.mutex);
         }
 
-        // Read a line from the source file
         ssize_t read_len = getline(&line_pointer, &length, source_file);
         if (read_len != -1)
         {
-            // Add the line to the queue
-            queue.lines[queue.tail] = line_pointer;  // Directly store the line in the queue
+            queue.lines[queue.tail] = line_pointer;  
             queue.tail = (queue.tail + 1) % QUEUE_SIZE;
             queue.count++;
-            line_pointer = NULL;  // Reset the line pointer for the next getline() call
-            length = 0;      // Reset the buffer length
+            line_pointer = NULL;  
+            length = 0;      
         }
         else
         {
-            // Signal EOF and exit the loop
             pthread_mutex_lock(&eof_mutex);
             eof_status = 1;
             pthread_mutex_unlock(&eof_mutex);
-            pthread_cond_broadcast(&queue.not_empty); // Notify all writers
+            pthread_cond_broadcast(&queue.not_empty); 
             pthread_mutex_unlock(&queue.mutex);
             loop_run = false;
         }
 
-        pthread_cond_signal(&queue.not_empty); // Signal that the queue is not empty
+        pthread_cond_signal(&queue.not_empty); 
         pthread_mutex_unlock(&queue.mutex);
     }
     free(line_pointer);
@@ -134,7 +128,6 @@ int main(int argc, char *argv[]) {
         print_error("Error: <n> must be between 2 and 10\n");
     }
 
-    // Open source and destination files
     FILE *source_file = fopen(argv[2], "r");
     if (source_file == NULL)
     {
@@ -150,7 +143,6 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    // Initialize the shared queue
     queue.head = 0;
     queue.tail = 0;
     queue.count = 0;
@@ -161,7 +153,6 @@ int main(int argc, char *argv[]) {
     pthread_t readers[n];
     pthread_t writers[n];
 
-    // Create reader and writer threads
     for (int i = 0; i < n; ++i)
     {
         ret = pthread_create(&readers[i], NULL, reader_thread, source_file);
@@ -170,7 +161,6 @@ int main(int argc, char *argv[]) {
         if (ret) print_error("Error: Creation of thread error");
     }
 
-    // Wait for all threads to finish
     for (int i = 0; i < n; ++i) {
         ret = pthread_join(readers[i], NULL);
         if (ret) print_error("Error: Creation of thread error");
@@ -178,11 +168,9 @@ int main(int argc, char *argv[]) {
         if (ret) print_error("Error: Creation of thread error");
     }
 
-    // Close files
     fclose(source_file);
     fclose(destination_file);
 
-    // Cleanup
     pthread_mutex_destroy(&queue.mutex);
     pthread_cond_destroy(&queue.not_empty);
     pthread_cond_destroy(&queue.not_full);
