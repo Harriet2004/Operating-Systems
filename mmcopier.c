@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
 
     if (argc != 4)
     {
-        fprintf(stderr, "Error: Must provide only three arguments: <num_files> <source_dir> <destination_dir>\n");
+        fprintf(stderr, "Error: Must provide only three arguments: %s <num_files> <source_dir> <destination_dir>\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
 
     if (num_files < 0 || num_files > 10)
     {
-        fprintf(stderr, "Error: <num_files> should be between 0 and 10.\n");
+        fprintf(stderr, "Error: <num_files> must be between 0 and 10.\n");
         return EXIT_FAILURE;
     }
 
@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
     for (int i = 0; i < num_files; i++)
     {
         ret = pthread_join(thread[i], NULL);
-        if (ret) print_error("ERROR: pthread join failed");
+        if (ret) print_error("Error: pthread join failed");
     }
 
     return EXIT_SUCCESS;

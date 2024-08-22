@@ -119,14 +119,14 @@ int main(int argc, char *argv[]) {
     int ret;
     
     if (argc != 4) {
-        fprintf(stderr, "Usage: %s <n> <source_file> <destination_file>\n", argv[0]);
+        fprintf(stderr, "Error: Must provide only three arguments: %s <n> <source_file> <destination_file>\n", argv[0]);
         return EXIT_FAILURE;
     }
 
     int n = atoi(argv[1]);
     if (n < 2 || n > 10)
     {
-        fprintf(stderr, "Error: n must be between 2 and 10\n");
+        fprintf(stderr, "Error: <n> must be between 2 and 10\n");
         return EXIT_FAILURE;
     }
 
