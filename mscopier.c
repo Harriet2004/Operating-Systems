@@ -50,7 +50,12 @@ void *reader_thread(void *arg)
         if (fgets(line, LINE_BUFFER_SIZE, source_file) != NULL)
         {
             // Add the line to the queue
-            queue.lines[queue.tail] = strdup(line);
+            queue.lines[queue.tail] = malloc(strlen(line) + 1);  // Allocate memory for the line
+            if (queue.lines[queue.tail] == NULL) {
+                perror("Failed to allocate memory");
+                exit(EXIT_FAILURE);
+            }
+            strcpy(queue.lines[queue.tail], line);
             queue.tail = (queue.tail + 1) % QUEUE_SIZE;
             queue.count++;
         }
@@ -133,7 +138,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    FILE *destination_file = fopen(argv[3], "w");
+    FILE *destination_file = fopen(argv[3], "wb");
     if (destination_file == NULL)
     {
         perror("Error opening destination file");
@@ -149,12 +154,14 @@ int main(int argc, char *argv[]) {
     pthread_cond_init(&queue.not_empty, NULL);
     pthread_cond_init(&queue.not_full, NULL);
 
-    pthread_t readers[n], writers[n];
+    pthread_t readers[n];
+    pthread_t writers[n];
 
     // Create reader and writer threads
     for (int i = 0; i < n; ++i)
     {
         ret = pthread_create(&readers[i], NULL, reader_thread, source_file);
+        if (ret) print_error("Error: Creation of thread error");
         ret = pthread_create(&writers[i], NULL, writer_thread, destination_file);
         if (ret) print_error("Error: Creation of thread error");
     }
@@ -162,6 +169,7 @@ int main(int argc, char *argv[]) {
     // Wait for all threads to finish
     for (int i = 0; i < n; ++i) {
         ret = pthread_join(readers[i], NULL);
+        if (ret) print_error("Error: Creation of thread error");
         ret = pthread_join(writers[i], NULL);
         if (ret) print_error("Error: Creation of thread error");
     }
