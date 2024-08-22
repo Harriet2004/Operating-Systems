@@ -3,13 +3,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdbool.h> 
+#include <errno.h>
 
 #define BUFFER_SIZE 1024
-#define QUEUE_SIZE 20
 #define LINE_BUFFER_SIZE 1024
+#define QUEUE_SIZE 20
 
     int print_error(char *msg) {
-        fprintf(stderr, "%s\n", msg);
+        fprintf(stderr, "%s %s\n", msg, strerror(errno));
         exit(2);
     }
 
@@ -29,14 +31,16 @@ SharedQueue queue;
 
 // Mutex and condition variables for end-of-file flag
 pthread_mutex_t eof_mutex = PTHREAD_MUTEX_INITIALIZER;
-int eof_reached = 0;
+int eof_status = 0;
 
 void *reader_thread(void *arg)
 {
     FILE *source_file = (FILE *)arg;
-    char line[LINE_BUFFER_SIZE];
+    char *line_pointer = NULL;
+    size_t length = 0;
+    bool loop_run = true;
 
-    while (1)
+    while (loop_run)
     {
         pthread_mutex_lock(&queue.mutex);
 
@@ -47,71 +51,72 @@ void *reader_thread(void *arg)
         }
 
         // Read a line from the source file
-        if (fgets(line, LINE_BUFFER_SIZE, source_file) != NULL)
+        ssize_t read_len = getline(&line_pointer, &length, source_file);
+        if (read_len != -1)
         {
             // Add the line to the queue
-            queue.lines[queue.tail] = malloc(strlen(line) + 1);  // Allocate memory for the line
-            if (queue.lines[queue.tail] == NULL) {
-                perror("Failed to allocate memory");
-                exit(EXIT_FAILURE);
-            }
-            strcpy(queue.lines[queue.tail], line);
+            queue.lines[queue.tail] = line_pointer;  // Directly store the line in the queue
             queue.tail = (queue.tail + 1) % QUEUE_SIZE;
             queue.count++;
+            line_pointer = NULL;  // Reset the line pointer for the next getline() call
+            length = 0;      // Reset the buffer length
         }
         else
         {
             // Signal EOF and exit the loop
             pthread_mutex_lock(&eof_mutex);
-            eof_reached = 1;
+            eof_status = 1;
             pthread_mutex_unlock(&eof_mutex);
             pthread_cond_broadcast(&queue.not_empty); // Notify all writers
             pthread_mutex_unlock(&queue.mutex);
-            break;
+            loop_run = false;
         }
 
         pthread_cond_signal(&queue.not_empty); // Signal that the queue is not empty
         pthread_mutex_unlock(&queue.mutex);
     }
-
+    free(line_pointer);
     return NULL;
 }
 
 void *writer_thread(void *arg)
 {
     FILE *destination_file = (FILE *)arg;
+    bool loop_run = true; 
 
-    while (1)
+    while (loop_run)
     {
-        pthread_mutex_lock(&queue.mutex);
+        pthread_mutex_lock(&queue.mutex);  
 
-        // Wait until the queue is not empty
         while (queue.count == 0)
         {
-            pthread_mutex_lock(&eof_mutex);
-            if (eof_reached)
+            pthread_mutex_lock(&eof_mutex);  
+            if (eof_status) 
             {
-                pthread_mutex_unlock(&eof_mutex);
-                pthread_mutex_unlock(&queue.mutex);
-                return NULL; // Exit the thread if EOF and the queue is empty
+                pthread_mutex_unlock(&eof_mutex);  
+                loop_run = false; 
+                break;  
             }
-            pthread_mutex_unlock(&eof_mutex);
-            pthread_cond_wait(&queue.not_empty, &queue.mutex);
+            pthread_mutex_unlock(&eof_mutex); 
+            pthread_cond_wait(&queue.not_empty, &queue.mutex); 
         }
 
-        // Retrieve the line from the queue
+        if (!loop_run) 
+        {
+            pthread_mutex_unlock(&queue.mutex); 
+            break; 
+        }
+
         char *line = queue.lines[queue.head];
-        queue.head = (queue.head + 1) % QUEUE_SIZE;
-        queue.count--;
+        queue.head = (queue.head + 1) % QUEUE_SIZE;  
+        queue.count--;  
 
-        pthread_cond_signal(&queue.not_full); // Signal that the queue is not full
-        pthread_mutex_unlock(&queue.mutex);
+        pthread_cond_signal(&queue.not_full);  
+        pthread_mutex_unlock(&queue.mutex);  
 
-        // Write the line to the destination file
-        fputs(line, destination_file);
-        free(line); // Free the memory allocated for the line
+        fprintf(destination_file, "%s", line);
+        free(line);
     }
-
     return NULL;
 }
 
@@ -126,22 +131,21 @@ int main(int argc, char *argv[]) {
     int n = atoi(argv[1]);
     if (n < 2 || n > 10)
     {
-        fprintf(stderr, "Error: <n> must be between 2 and 10\n");
-        return EXIT_FAILURE;
+        print_error("Error: <n> must be between 2 and 10\n");
     }
 
     // Open source and destination files
     FILE *source_file = fopen(argv[2], "r");
     if (source_file == NULL)
     {
-        perror("Error opening source file");
+        fprintf(stderr, "Error: Cannot open source file %s: %s\n", argv[2], strerror(errno));
         return EXIT_FAILURE;
     }
 
     FILE *destination_file = fopen(argv[3], "wb");
     if (destination_file == NULL)
-    {
-        perror("Error opening destination file");
+    {   
+        fprintf(stderr, "Error: Cannot open destination file %s: %s\n", argv[3], strerror(errno));
         fclose(source_file);
         return EXIT_FAILURE;
     }
