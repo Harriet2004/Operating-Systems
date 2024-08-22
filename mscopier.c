@@ -6,72 +6,87 @@
 
 #define BUFFER_SIZE 1024
 
-    int print_error(char *msg) {
-        fprintf(stderr, "%s\n", msg);
-        exit(2);
-    }
-    
 // Shared data structures
-char buffer[BUFFER_SIZE];
-int buffer_filled = 0;  // 0 means empty, >0 means filled
+SharedQueue queue;
+
+// Mutex and condition variables for end-of-file flag
+pthread_mutex_t eof_mutex = PTHREAD_MUTEX_INITIALIZER;
 int eof_reached = 0;
 
-// Mutex and condition variables
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t buffer_not_empty = PTHREAD_COND_INITIALIZER;
-pthread_cond_t buffer_not_full = PTHREAD_COND_INITIALIZER;
+void *reader_thread(void *arg)
+{
+    FILE *source_file = (FILE *)arg;
+    char line[LINE_BUFFER_SIZE];
 
-// File pointers
-FILE *source_file, *destination_file;
+    while (1)
+    {
+        pthread_mutex_lock(&queue.mutex);
 
-void *reader_thread(void *arg) {
-    while (1) {
-        pthread_mutex_lock(&mutex);
-        
-        // Wait until the buffer is empty
-        while (buffer_filled > 0) {
-            pthread_cond_wait(&buffer_not_full, &mutex);
+        // Wait until the queue is not full
+        while (queue.count == QUEUE_SIZE)
+        {
+            pthread_cond_wait(&queue.not_full, &queue.mutex);
         }
 
-        // Read data from the source file into the buffer
-        size_t bytes_read = fread(buffer, 1, BUFFER_SIZE, source_file);
-
-        if (bytes_read == 0) {  // End of file reached
+        // Read a line from the source file
+        if (fgets(line, LINE_BUFFER_SIZE, source_file) != NULL)
+        {
+            // Add the line to the queue
+            queue.lines[queue.tail] = strdup(line);
+            queue.tail = (queue.tail + 1) % QUEUE_SIZE;
+            queue.count++;
+        }
+        else
+        {
+            // Signal EOF and exit the loop
+            pthread_mutex_lock(&eof_mutex);
             eof_reached = 1;
-            pthread_cond_signal(&buffer_not_empty);  // Notify any waiting writer
-            pthread_mutex_unlock(&mutex);
+            pthread_mutex_unlock(&eof_mutex);
+            pthread_cond_broadcast(&queue.not_empty); // Notify all writers
+            pthread_mutex_unlock(&queue.mutex);
             break;
         }
 
-        buffer_filled = bytes_read;
-        pthread_cond_signal(&buffer_not_empty);  // Signal that buffer has data
-        pthread_mutex_unlock(&mutex);
+        pthread_cond_signal(&queue.not_empty); // Signal that the queue is not empty
+        pthread_mutex_unlock(&queue.mutex);
     }
 
     return NULL;
 }
 
-void *writer_thread(void *arg) {
-    while (1) {
-        pthread_mutex_lock(&mutex);
+void *writer_thread(void *arg)
+{
+    FILE *destination_file = (FILE *)arg;
 
-        // Wait until the buffer has data
-        while (buffer_filled == 0 && !eof_reached) {
-            pthread_cond_wait(&buffer_not_empty, &mutex);
+    while (1)
+    {
+        pthread_mutex_lock(&queue.mutex);
+
+        // Wait until the queue is not empty
+        while (queue.count == 0)
+        {
+            pthread_mutex_lock(&eof_mutex);
+            if (eof_reached)
+            {
+                pthread_mutex_unlock(&eof_mutex);
+                pthread_mutex_unlock(&queue.mutex);
+                return NULL; // Exit the thread if EOF and the queue is empty
+            }
+            pthread_mutex_unlock(&eof_mutex);
+            pthread_cond_wait(&queue.not_empty, &queue.mutex);
         }
 
-        // If EOF and buffer is empty, exit the loop
-        if (eof_reached && buffer_filled == 0) {
-            pthread_mutex_unlock(&mutex);
-            break;
-        }
+        // Retrieve the line from the queue
+        char *line = queue.lines[queue.head];
+        queue.head = (queue.head + 1) % QUEUE_SIZE;
+        queue.count--;
 
-        // Write data from the buffer to the destination file
-        fwrite(buffer, 1, buffer_filled, destination_file);
+        pthread_cond_signal(&queue.not_full); // Signal that the queue is not full
+        pthread_mutex_unlock(&queue.mutex);
 
-        buffer_filled = 0;
-        pthread_cond_signal(&buffer_not_full);  // Signal that buffer is empty
-        pthread_mutex_unlock(&mutex);
+        // Write the line to the destination file
+        fputs(line, destination_file);
+        free(line); // Free the memory allocated for the line
     }
 
     return NULL;
@@ -86,31 +101,43 @@ int main(int argc, char *argv[]) {
     }
 
     int n = atoi(argv[1]);
-    if (n < 2 || n > 10) {
+    if (n < 2 || n > 10)
+    {
         fprintf(stderr, "Error: n must be between 2 and 10\n");
         return EXIT_FAILURE;
     }
 
     // Open source and destination files
-    source_file = fopen(argv[2], "rb");
-    if (source_file == NULL) {
+    FILE *source_file = fopen(argv[2], "r");
+    if (source_file == NULL)
+    {
         perror("Error opening source file");
         return EXIT_FAILURE;
     }
 
-    destination_file = fopen(argv[3], "wb");
-    if (destination_file == NULL) {
+    FILE *destination_file = fopen(argv[3], "w");
+    if (destination_file == NULL)
+    {
         perror("Error opening destination file");
         fclose(source_file);
         return EXIT_FAILURE;
     }
 
+    // Initialize the shared queue
+    queue.head = 0;
+    queue.tail = 0;
+    queue.count = 0;
+    pthread_mutex_init(&queue.mutex, NULL);
+    pthread_cond_init(&queue.not_empty, NULL);
+    pthread_cond_init(&queue.not_full, NULL);
+
     pthread_t readers[n], writers[n];
 
     // Create reader and writer threads
-    for (int i = 0; i < n; ++i) {
-        ret = pthread_create(&readers[i], NULL, reader_thread, NULL);
-        ret = pthread_create(&writers[i], NULL, writer_thread, NULL);
+    for (int i = 0; i < n; ++i)
+    {
+        ret = pthread_create(&readers[i], NULL, reader_thread, source_file);
+        ret = pthread_create(&writers[i], NULL, writer_thread, destination_file);
         if (ret) print_error("Error: Creation of thread error");
     }
 
@@ -126,9 +153,9 @@ int main(int argc, char *argv[]) {
     fclose(destination_file);
 
     // Cleanup
-    pthread_mutex_destroy(&mutex);
-    pthread_cond_destroy(&buffer_not_empty);
-    pthread_cond_destroy(&buffer_not_full);
+    pthread_mutex_destroy(&queue.mutex);
+    pthread_cond_destroy(&queue.not_empty);
+    pthread_cond_destroy(&queue.not_full);
 
     return EXIT_SUCCESS;
 }
