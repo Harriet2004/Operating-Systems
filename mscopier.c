@@ -6,6 +6,11 @@
 
 #define BUFFER_SIZE 1024
 
+    int print_error(char *msg) {
+        fprintf(stderr, "%s\n", msg);
+        exit(2);
+    }
+    
 // Shared data structures
 char buffer[BUFFER_SIZE];
 int buffer_filled = 0;  // 0 means empty, >0 means filled
@@ -73,6 +78,8 @@ void *writer_thread(void *arg) {
 }
 
 int main(int argc, char *argv[]) {
+    int ret;
+    
     if (argc != 4) {
         fprintf(stderr, "Usage: %s <n> <source_file> <destination_file>\n", argv[0]);
         return EXIT_FAILURE;
@@ -102,14 +109,16 @@ int main(int argc, char *argv[]) {
 
     // Create reader and writer threads
     for (int i = 0; i < n; ++i) {
-        pthread_create(&readers[i], NULL, reader_thread, NULL);
-        pthread_create(&writers[i], NULL, writer_thread, NULL);
+        ret = pthread_create(&readers[i], NULL, reader_thread, NULL);
+        ret = pthread_create(&writers[i], NULL, writer_thread, NULL);
+        if (ret) print_error("Error: Creation of thread error");
     }
 
     // Wait for all threads to finish
     for (int i = 0; i < n; ++i) {
-        pthread_join(readers[i], NULL);
-        pthread_join(writers[i], NULL);
+        ret = pthread_join(readers[i], NULL);
+        ret = pthread_join(writers[i], NULL);
+        if (ret) print_error("Error: Creation of thread error");
     }
 
     // Close files
