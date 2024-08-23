@@ -17,18 +17,29 @@
 
 typedef struct {
     char *lines[QUEUE_SIZE];  // Array to hold lines
+    int sequence[QUEUE_SIZE]; // Sequence numbers to ensure correct order
     int head;                 // Index for the front of the queue
     int tail;                 // Index for the end of the queue
     int count;                // Number of items in the queue
+    int current_sequence;     // The current sequence number for the next line added to the queue
     pthread_mutex_t mutex;    // Mutex to protect access to the queue
     pthread_cond_t not_empty; // Condition variable to signal that the queue is not empty
     pthread_cond_t not_full;  // Condition variable to signal that the queue is not full
 } SharedQueue;
 
-SharedQueue queue;
+SharedQueue queue = {
+    .head = 0,
+    .tail = 0,
+    .count = 0,
+    .current_sequence = 0,
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
+    .not_empty = PTHREAD_COND_INITIALIZER,
+    .not_full = PTHREAD_COND_INITIALIZER
+};
 
 pthread_mutex_t eof_mutex = PTHREAD_MUTEX_INITIALIZER;
 int eof_status = 0;
+int next_line_to_write = 0;
 
 void *reader_thread(void *arg) {
     FILE *source_file = (FILE *)arg;
@@ -42,19 +53,18 @@ void *reader_thread(void *arg) {
         while (queue.count == QUEUE_SIZE) {
             pthread_cond_wait(&queue.not_full, &queue.mutex);
         }
-
+    
         ssize_t read_len = getline(&line_pointer, &length, source_file);
         if (read_len != -1) {
             queue.lines[queue.tail] = line_pointer;  
+            queue.sequence[queue.tail] = queue.current_sequence++;
             queue.tail = (queue.tail + 1) % QUEUE_SIZE;
             queue.count++;
             line_pointer = NULL;  
             length = 0;      
         }
         else {
-            pthread_mutex_lock(&eof_mutex);
             eof_status = 1;
-            pthread_mutex_unlock(&eof_mutex);
             pthread_cond_broadcast(&queue.not_empty); 
             pthread_mutex_unlock(&queue.mutex);
             loop_run = false;
@@ -69,47 +79,51 @@ void *reader_thread(void *arg) {
 
 void *writer_thread(void *arg) {
     FILE *destination_file = (FILE *)arg;
-    bool loop_run = true; 
+    bool loop_run = true;
 
-    while (loop_run)
-    {
-        pthread_mutex_lock(&queue.mutex);  
+    while (loop_run) {
+        pthread_mutex_lock(&queue.mutex);
 
-        while (queue.count == 0)
-        {
-            pthread_mutex_lock(&eof_mutex);  
-            if (eof_status) 
-            {
-                pthread_mutex_unlock(&eof_mutex);  
-                loop_run = false; 
-                break;  
+        while (queue.count == 0) {
+            if (eof_status && queue.count == 0) {  // If EOF is reached and queue is empty, exit
+                pthread_mutex_unlock(&queue.mutex);
+                loop_run = false;  // Exit the loop
+                break;
             }
-            pthread_mutex_unlock(&eof_mutex); 
-            pthread_cond_wait(&queue.not_empty, &queue.mutex); 
+            pthread_cond_wait(&queue.not_empty, &queue.mutex);
         }
 
-        if (!loop_run) 
-        {
-            pthread_mutex_unlock(&queue.mutex); 
-            break; 
+        if (!loop_run) {  // If exiting, skip further execution
+            break;
         }
 
-        char *line = queue.lines[queue.head];
-        queue.head = (queue.head + 1) % QUEUE_SIZE;  
-        queue.count--;  
+        pthread_mutex_lock(&eof_mutex); // Lock to protect `next_line_to_write`
+        if (queue.sequence[queue.head] == next_line_to_write) {
+            char *line = queue.lines[queue.head];
+            queue.head = (queue.head + 1) % QUEUE_SIZE;
+            queue.count--;
 
-        pthread_cond_signal(&queue.not_full);  
-        pthread_mutex_unlock(&queue.mutex);  
+            // Increment the next line to write
+            next_line_to_write++;
 
-        fprintf(destination_file, "%s", line);
-        free(line);
+            pthread_cond_signal(&queue.not_full);  // Notify readers that space is available
+            pthread_mutex_unlock(&queue.mutex);
+
+            // Write the line to the destination file
+            fprintf(destination_file, "%s", line);
+
+            free(line);
+        } else {
+            pthread_mutex_unlock(&queue.mutex);  // Always unlock the queue
+        }
+        pthread_mutex_unlock(&eof_mutex);  // Unlock sequence protection
     }
     return NULL;
 }
 
+
 int main(int argc, char *argv[]) {
     int ret;
-    
     if (argc != 4) {
         fprintf(stderr, "Error: Must provide only three arguments: %s <n> <source_file> <destination_file>\n", argv[0]);
         return EXIT_FAILURE;
@@ -132,13 +146,6 @@ int main(int argc, char *argv[]) {
         fclose(source_file);
         return EXIT_FAILURE;
     }
-
-    queue.head = 0;
-    queue.tail = 0;
-    queue.count = 0;
-    pthread_mutex_init(&queue.mutex, NULL);
-    pthread_cond_init(&queue.not_empty, NULL);
-    pthread_cond_init(&queue.not_full, NULL);
 
     pthread_t readers[n];
     pthread_t writers[n];
@@ -163,6 +170,7 @@ int main(int argc, char *argv[]) {
     pthread_mutex_destroy(&queue.mutex);
     pthread_cond_destroy(&queue.not_empty);
     pthread_cond_destroy(&queue.not_full);
+    pthread_mutex_destroy(&eof_mutex);
 
     return EXIT_SUCCESS;
 }
