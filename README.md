@@ -50,16 +50,15 @@ No explicit locking is required in this task as each thread operates independent
 
 Task 2: mscopier.c
 Locking Mechanism:
-pthread_mutex_t is used to protect access to the shared queue (queue.mutex).
-pthread_cond_t is used for condition variables:
-queue.not_empty: Signaled when the queue is not empty.
-queue.not_full: Signaled when the queue is not full.
+Mutex Locks:
 File: mscopier.c
-Line 40: A mutex lock pthread_mutex_t mutex is initialized to protect access to the shared queue structure. This lock prevents race conditions when multiple threads access or modify the queue simultaneously.
-Line 41: Two condition variables, pthread_cond_t not_empty and pthread_cond_t not_full, are initialized. These variables are used to manage the state of the queue:
-not_empty is signaled when the queue has data, allowing writer threads to consume it.
-not_full is signaled when space is available in the queue, allowing reader threads to produce more data.
-Line 45: Another mutex eof_mutex is initialized to protect the end-of-file status (eof_status) and the next line to write (next_line_to_write).
+Line 40: pthread_mutex_t mutex is initialized to protect access to the shared queue structure. This lock prevents race conditions when multiple threads access or modify the queue simultaneously.
+Line 45: Another mutex, pthread_mutex_t eof_mutex, is initialized to protect the end-of-file status (eof_status) and the sequence number of the next line to write (next_line_to_write).
+Condition Variables:
+File: mscopier.c
+Line 41: Two condition variables, pthread_cond_t not_empty and pthread_cond_t not_full, are initialized to manage the state of the shared queue:
+not_empty: Signaled when there is data in the queue, allowing writer threads to consume it.
+not_full: Signaled when space is available in the queue, allowing reader threads to produce more data.
 Critical Sections:
 Locks are implemented around critical sections in reader_thread and writer_thread to prevent race conditions.
 Reader Thread (reader_thread function):
