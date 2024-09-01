@@ -54,21 +54,32 @@ pthread_mutex_t is used to protect access to the shared queue (queue.mutex).
 pthread_cond_t is used for condition variables:
 queue.not_empty: Signaled when the queue is not empty.
 queue.not_full: Signaled when the queue is not full.
-
+File: mscopier.c
+Line 40: A mutex lock pthread_mutex_t mutex is initialized to protect access to the shared queue structure. This lock prevents race conditions when multiple threads access or modify the queue simultaneously.
+Line 41: Two condition variables, pthread_cond_t not_empty and pthread_cond_t not_full, are initialized. These variables are used to manage the state of the queue:
+not_empty is signaled when the queue has data, allowing writer threads to consume it.
+not_full is signaled when space is available in the queue, allowing reader threads to produce more data.
+Line 45: Another mutex eof_mutex is initialized to protect the end-of-file status (eof_status) and the next line to write (next_line_to_write).
 Critical Sections:
 Locks are implemented around critical sections in reader_thread and writer_thread to prevent race conditions.
-
+Reader Thread (reader_thread function):
+Lines 61-64: The queue mutex (queue.mutex) is locked to check if the queue is full before adding data. If the queue is full, it waits on the not_full condition.
+Lines 80-88: The mutex is unlocked, and the not_empty condition is signaled to notify writer threads that there is data available in the queue.
+Writer Thread (writer_thread function):
+Lines 104-107: The queue mutex (queue.mutex) is locked to check if the queue is empty before removing data. If the queue is empty and EOF is reached, the thread exits.
+Lines 123-127: The mutex eof_mutex is locked to ensure that the next line to be written is in sequence.
+Lines 132-136: After the line is written to the destination file, the mutex is unlocked, and the not_full condition is signaled to notify reader threads that space is available in the queue.
 File Transfer to Server
 To transfer files to the server, use the following scp commands:
 To copy files:
-scp <file*name> <server_name>:<destination_directory_name>
+scp <file\*name> <server_name>:<destination_directory_name>
 To copy directories:
 scp -r <source_directory_name> <server_name>:<destination_directory_name>
 
 Memory Leak Checks
 To check for memory leaks, we used valgrind. After copying the files to server and navigating to that directory, run the following commands:
 For memory leaks in mmcopier.c:
-valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./mmcopier <number_of_files> <source_dir> <destination_dir> 
+valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./mmcopier <number_of_files> <source_dir> <destination_dir>
 For memory leaks in mscopier.c:
 valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./mscopier <n> <source_file> <destination_file>
 Results indicate that there are no memory leaks, as all heap blocks were freed, and no errors were detected.
