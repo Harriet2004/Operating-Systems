@@ -17,7 +17,7 @@ Task 1: Multithreaded Multiple File Copying
 Run the following command:
 ./mmcopier <number_of_files> <source_dir> <destination_dir>
 number_of_files: Number of files to copy (must be between 1 and 10).
-source_dir: The directory containing the source files (e.g., source_dir/source1.txt).
+source_dir: The directory containing the source files (e.g., source_dir).
 destination_dir: The target directory where the files will be copied. If no target directory present, program will create one.
 
 Task 2: Multithreaded Single File Copying
