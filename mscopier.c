@@ -39,7 +39,8 @@ SharedQueue queue = {
     .current_sequence = 0,
     .mutex = PTHREAD_MUTEX_INITIALIZER,
     .not_empty = PTHREAD_COND_INITIALIZER,
-    .not_full = PTHREAD_COND_INITIALIZER};
+    .not_full = PTHREAD_COND_INITIALIZER
+};
 
 pthread_mutex_t eof_mutex = PTHREAD_MUTEX_INITIALIZER; // Mutex to protect the end-of-file status
 int eof_status = 0;                                    // Status to indicate if the end-of-file is reached
@@ -51,20 +52,17 @@ int next_line_to_write = 0;                            // Next line number to wr
  *  args: A pointer to the source file
  *  returns: NULL
  */
-void *reader_thread(void *arg)
-{
+void *reader_thread(void *arg) {
     FILE *source_file = (FILE *)arg;
     char *line_pointer = NULL; // Pointer to store the line read from the file
     size_t length = 0;         // Variable to store the length of the line
     bool loop_run = true;      // Control variable to manage the loop execution
 
-    while (loop_run)
-    {
+    while (loop_run) {
         pthread_mutex_lock(&queue.mutex); // Locks the queue for thread-safe access
 
         // Wait if the queue is full
-        while (queue.count == QUEUE_SIZE)
-        {
+        while (queue.count == QUEUE_SIZE) {
             pthread_cond_wait(&queue.not_full, &queue.mutex);
         }
 
@@ -99,18 +97,15 @@ void *reader_thread(void *arg)
  *  args: A pointer to the destination file
  *  returns: NULL
  */
-void *writer_thread(void *arg)
-{
+void *writer_thread(void *arg) {
     FILE *destination_file = (FILE *)arg;
     bool loop_run = true; // Control variable to manage the loop execution
 
-    while (loop_run)
-    {
+    while (loop_run) {
         pthread_mutex_lock(&queue.mutex); // Locks the queue for thread-safe access
 
         // Wait if the queue is empty
-        while (queue.count == 0)
-        {   
+        while (queue.count == 0) {   
             // If EOF is reached and queue is empty, unlock the queue mutex and exit the loop
             if (eof_status && queue.count == 0) {                                       
                 pthread_mutex_unlock(&queue.mutex); 
@@ -126,8 +121,7 @@ void *writer_thread(void *arg)
         }
 
         pthread_mutex_lock(&eof_mutex); // Lock to protect `next_line_to_write`
-        if (queue.sequence[queue.head] == next_line_to_write)
-        {
+        if (queue.sequence[queue.head] == next_line_to_write) {
             char *line = queue.lines[queue.head];
             queue.head = (queue.head + 1) % QUEUE_SIZE;
             queue.count--;
@@ -143,8 +137,7 @@ void *writer_thread(void *arg)
 
             free(line); // Free the memory allocated for the line
         }
-        else
-        {
+        else {
             pthread_mutex_unlock(&queue.mutex); // Always unlock the queue
         }
         pthread_mutex_unlock(&eof_mutex); // Unlocks sequence protection
@@ -155,28 +148,24 @@ void *writer_thread(void *arg)
 int main(int argc, char *argv[])
 {
     int ret;
-    if (argc != 4)
-    {
+    if (argc != 4) {
         fprintf(stderr, "Error: Must provide only three arguments: %s <n> <source_file> <destination_file>\n", argv[0]);
         return EXIT_FAILURE;
     }
 
     int n = atoi(argv[1]);
-    if (n < 2 || n > 10)
-    {
+    if (n < 2 || n > 10) {
         print_error("Error: <n> must be between 2 and 10\n");
     }
 
     FILE *source_file = fopen(argv[2], "r");
-    if (source_file == NULL)
-    {
+    if (source_file == NULL) {
         fprintf(stderr, "Error: Cannot open source file %s: %s\n", argv[2], strerror(errno));
         return EXIT_FAILURE;
     }
 
     FILE *destination_file = fopen(argv[3], "wb");
-    if (destination_file == NULL)
-    {
+    if (destination_file == NULL) {
         fprintf(stderr, "Error: Cannot open destination file %s: %s\n", argv[3], strerror(errno));
         fclose(source_file);
         return EXIT_FAILURE;
@@ -186,8 +175,7 @@ int main(int argc, char *argv[])
     pthread_t writers[n];
 
     // Creates reader and writer threads
-    for (int i = 0; i < n; ++i)
-    {
+    for (int i = 0; i < n; ++i) {
         ret = pthread_create(&readers[i], NULL, reader_thread, source_file);
         if (ret)
             print_error("Error: Creation of thread error");
@@ -197,8 +185,7 @@ int main(int argc, char *argv[])
     }
 
     // Waits for all threads to finish
-    for (int i = 0; i < n; ++i)
-    {
+    for (int i = 0; i < n; ++i) {
         ret = pthread_join(readers[i], NULL);
         if (ret)
             print_error("Error: Creation of thread error");
