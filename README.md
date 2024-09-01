@@ -70,7 +70,7 @@ To check for memory leaks, we used valgrind. After copying the files to server a
 For memory leaks in mmcopier.c:
 valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./mmcopier <number_of_files> <source_dir> <destination_dir> 
 For memory leaks in mscopier.c:
-valgrind --track-origins=yes --leak-check=full --show-leak-kinds=allvalgrind --leak-check=full ./mscopier <n> <source_file> <destination_file>
+valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./mscopier <n> <source_file> <destination_file>
 Results indicate that there are no memory leaks, as all heap blocks were freed, and no errors were detected.
 
 Contact Information
