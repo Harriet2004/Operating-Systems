@@ -47,8 +47,9 @@ int next_line_to_write = 0;                            // Next line number to wr
 
 /*
  * This function is executed by the reader threads. It reads lines from the source file and adds them to the shared queue.
- * args: arg - Pointer to the source file
- * returns: NULL
+ 
+ *  args: A pointer to the source file
+ *  returns: NULL
  */
 void *reader_thread(void *arg)
 {
@@ -69,17 +70,16 @@ void *reader_thread(void *arg)
 
         // Reads a line from the source file
         ssize_t read_len = getline(&line_pointer, &length, source_file);
-        if (read_len != -1)
-        {
-            queue.lines[queue.tail] = line_pointer;
-            queue.sequence[queue.tail] = queue.current_sequence++;
-            queue.tail = (queue.tail + 1) % QUEUE_SIZE;
-            queue.count++;
-            line_pointer = NULL;
-            length = 0;
+        // If read line is successful
+        if (read_len != -1) {
+            queue.lines[queue.tail] = line_pointer;        // Store the pointer to the read line in the queue at the current tail position
+            queue.sequence[queue.tail] = queue.current_sequence++; // Store the current sequence number and increment it for the next line
+            queue.tail = (queue.tail + 1) % QUEUE_SIZE;    // Move the tail index forward, wrapping around if it reaches the end of the queue
+            queue.count++;                                 // Increment queue count
+            line_pointer = NULL;                           // Reset line_pointer to NULL to allow getline to allocate a new buffer
+            length = 0;                                    // Reset the length variable for the next getline call
         }
-        else
-        {
+        else {
             eof_status = 1;                           // Sets EOF status to indicate the end of the file
             pthread_cond_broadcast(&queue.not_empty); // Notify all waiting writer threads
             pthread_mutex_unlock(&queue.mutex);       // Unlock the queue mutex
@@ -95,8 +95,9 @@ void *reader_thread(void *arg)
 
 /*
  * This function is executed by the writer threads. It retrieves lines from the shared queue and writes them to the destination file.
- * args: arg - Pointer to the destination file
- * returns: NULL
+ 
+ *  args: A pointer to the destination file
+ *  returns: NULL
  */
 void *writer_thread(void *arg)
 {
@@ -109,18 +110,18 @@ void *writer_thread(void *arg)
 
         // Wait if the queue is empty
         while (queue.count == 0)
-        {
-            if (eof_status && queue.count == 0)
-            {                                       // If EOF is reached and queue is empty, exit
-                pthread_mutex_unlock(&queue.mutex); // Unlocks the queue mutex
-                loop_run = false;                   // Exits the loop
+        {   
+            // If EOF is reached and queue is empty, unlock the queue mutex and exit the loop
+            if (eof_status && queue.count == 0) {                                       
+                pthread_mutex_unlock(&queue.mutex); 
+                loop_run = false;                   
                 break;
             }
             pthread_cond_wait(&queue.not_empty, &queue.mutex);
         }
 
-        if (!loop_run)
-        { // If exiting, skip further execution
+        // If exiting, skip further execution
+        if (!loop_run){ 
             break;
         }
 
@@ -151,11 +152,6 @@ void *writer_thread(void *arg)
     return NULL;
 }
 
-/*
- * Main function to initialize and start the reader and writer threads.
- * args: argc - number of arguments, argv - array of arguments
- * returns: EXIT_SUCCESS on successful execution, EXIT_FAILURE on error
- */
 int main(int argc, char *argv[])
 {
     int ret;
