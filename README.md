@@ -58,18 +58,20 @@ queue.not_full: Signaled when the queue is not full.
 Critical Sections:
 Locks are implemented around critical sections in reader_thread and writer_thread to prevent race conditions.
 
-Memory Leak Checks
-To check for memory leaks, we used valgrind. Run the following command on the university server:
-valgrind --leak-check=full ./mmcopier <number_of_files> <source_dir> <destination_dir>
-valgrind --leak-check=full ./mscopier <n> <source_file> <destination_file>
-Results indicate that there are no memory leaks, as all heap blocks were freed, and no errors were detected.
-
-File Transfer to University Server
-To transfer files to the university server, use the following scp commands:
+File Transfer to Server
+To transfer files to the server, use the following scp commands:
 To copy files:
 scp <file*name> <server_name>:<destination_directory_name>
 To copy directories:
 scp -r <source_directory_name> <server_name>:<destination_directory_name>
+
+Memory Leak Checks
+To check for memory leaks, we used valgrind. After copying the files to server and navigating to that directory, run the following commands:
+For memory leaks in mmcopier.c:
+valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./mmcopier <number_of_files> <source_dir> <destination_dir> 
+For memory leaks in mscopier.c:
+valgrind --track-origins=yes --leak-check=full --show-leak-kinds=allvalgrind --leak-check=full ./mscopier <n> <source_file> <destination_file>
+Results indicate that there are no memory leaks, as all heap blocks were freed, and no errors were detected.
 
 Contact Information
 Group Members:
