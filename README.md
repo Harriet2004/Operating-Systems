@@ -1,12 +1,3 @@
-To run the code on the teach servers, we used the 'scp' command as we're users of mac.
-To copy files, scp <file_name> sXXXXXXX@jupiter.csit.rmit.edu.au:<destination_directory_name> and to copy directories scp -r <source_directory_name> sXXXXXXX@jupiter.csit.rmit.edu.au:<destination_directory_name>
-
-After copying the files to the teaching servers, they can be run by going to the right directory by using the 'cd' command.
-To run the task 1 which is multithreaded multiple file copying, the following command has to be executed: ./mmcopier <number_of_files> source_dir destination_dir
-To run the task 2 which is multithreaded single file copying, the following command has to be executed: ./mscopier <n> input_file output_file
-An input_file is already present in the code which is known as gen.txt, output_file can be any .txt file and it will be generated.
-README.md
-
 Project Title
 Multithreading & Synchronisation
 
@@ -54,24 +45,29 @@ Mutex Locks:
 File: mscopier.c
 Line 40: pthread_mutex_t mutex is initialized to protect access to the shared queue structure. This lock prevents race conditions when multiple threads access or modify the queue simultaneously.
 Line 45: Another mutex, pthread_mutex_t eof_mutex, is initialized to protect the end-of-file status (eof_status) and the sequence number of the next line to write (next_line_to_write).
+
 Condition Variables:
 File: mscopier.c
 Line 41: Two condition variables, pthread_cond_t not_empty and pthread_cond_t not_full, are initialized to manage the state of the shared queue:
 not_empty: Signaled when there is data in the queue, allowing writer threads to consume it.
 not_full: Signaled when space is available in the queue, allowing reader threads to produce more data.
+
 Critical Sections:
 Locks are implemented around critical sections in reader_thread and writer_thread to prevent race conditions.
+
 Reader Thread (reader_thread function):
 Lines 61-64: The queue mutex (queue.mutex) is locked to check if the queue is full before adding data. If the queue is full, it waits on the not_full condition.
 Lines 80-88: The mutex is unlocked, and the not_empty condition is signaled to notify writer threads that there is data available in the queue.
+
 Writer Thread (writer_thread function):
 Lines 104-107: The queue mutex (queue.mutex) is locked to check if the queue is empty before removing data. If the queue is empty and EOF is reached, the thread exits.
 Lines 123-127: The mutex eof_mutex is locked to ensure that the next line to be written is in sequence.
 Lines 132-136: After the line is written to the destination file, the mutex is unlocked, and the not_full condition is signaled to notify reader threads that space is available in the queue.
+
 File Transfer to Server
 To transfer files to the server, use the following scp commands:
 To copy files:
-scp <file\*name> <server_name>:<destination_directory_name>
+scp <file_name> <server_name>:<destination_directory_name>
 To copy directories:
 scp -r <source_directory_name> <server_name>:<destination_directory_name>
 
